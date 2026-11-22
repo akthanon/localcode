@@ -1,0 +1,25 @@
+{
+  "name": "localcode",
+  "version": "0.1.0",
+  "description": "Local-first coding agent, an OpenCode-style clone specialized in local models (Ollama)",
+  "type": "module",
+  "bin": {
+    "localcode": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "serve": "node src/index.ts serve",
+    "run": "node src/index.ts run",
+    "test": "node --test test/*.test.ts",
+    "check": "node --test test/syntax.test.ts",
+    "mock": "node test/mock-server.ts",
+    "probe": "node test/phase2.probe.ts",
+    "probe:api": "node test/phase2.api.ts"
+  },
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "license": "MIT",
+  "keywords": ["ollama", "local-llm", "coding-agent", "opencode", "tui"]
+}

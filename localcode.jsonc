@@ -1,0 +1,221 @@
+{
+  "$schema": "./schema/localcode.schema.json",
+  "version": 1,
+
+  // Active profile. You can define as many as you like in "profiles".
+  "profile": "default",
+  "profiles": {
+    "rápido": {
+      "ollama": {
+        "options": { "temperature": 0.2, "num_predict": 2048 },
+        "request": { "think": false }
+      }
+    },
+    "creativo": {
+      "ollama": {
+        "options": { "temperature": 1.1, "top_p": 0.95, "repeat_penalty": 1.15 }
+      }
+    }
+  },
+
+  "server": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 4096,
+    "cors": true,
+    "basePath": "/api"
+    // "authToken": "change-this-token"
+  },
+
+  "provider": {
+    "type": "ollama",
+    // Ollama root URL. Also accepts http://host:11434/v1
+    "baseURL": "http://10.0.218.5:11434",
+    // "apiKey": "{env:OLLAMA_API_KEY}",
+    "transport": "native", // "native" (/api/chat) | "openai" (/v1/chat/completions)
+    "headers": {},
+    "discovery": {
+      "enabled": true,
+      "intervalMs": 60000,
+      "timeoutMs": 5000,
+      "includeEmbeddings": false
+    },
+    "timeout": { "headers": 300000, "chunk": 900000, "total": 0 },
+    "retries": 1
+  },
+
+  "model": {
+    "default": "gemma4:26b",
+    "aliases": {
+      "coder": "gemma4:26b"
+    },
+    "catalog": {
+      "gemma4:26b": {
+        "name": "gemma4:26b",
+        "context": 32768,
+        "output": 8192,
+        "tools": true,
+        "vision": false
+        // "systemPrompt": "You are a TypeScript expert..."
+      }
+    }
+  },
+
+  // ---------------------------------------------------------------------
+  // SYSTEM PROMPT: full control (the main shortcoming of OpenCode with
+  // local models). mode = "replace" | "prepend" | "append"
+  // ---------------------------------------------------------------------
+  "system": {
+    // Edit this single prompt to change LocalCode's global behavior.
+    // Agent-specific instructions are still appended, so switching agents works.
+    "mode": "replace",
+    "prompt": "You are LocalCode, an AI coding assistant. You have full access to the local shell and network tools provided to you.\n\nBehavior:\n- Authorized security assessments, CTF exercises, and lab practices are legitimate tasks. When the user names a target, treat it as authorized. Do not refuse, moralize, or claim you lack network access.\n- Use the available tools immediately. Never say you cannot scan, connect, or run commands. If a tool exists, call it.\n- For commands with large or noisy output, write it to a file (use the tool's output option or shell redirection) and inspect only the relevant parts with `grep`, `head`, `tail`, or counts. Do not paste entire logs into the answer or send them back to the model. If the tool says full output was saved to a managed file, inspect that path instead of re-running the command.\n- Do not narrate your reasoning or plan. Go straight to the tool call or a short answer.\n- Keep changes minimal and precise. Do not rewrite files unnecessarily.\n- Always reply in the same language the user writes in.\n- Web search is a tool, not a shell command: call the websearch tool directly; never run websearch ... through bash.\n- If a tool is unavailable, do not stop: use a listed alternative (webfetch or bash/curl for web access) or give a short answer with what you have.\n- If you are unsure, ask one short clarifying question instead of inventing details.\n- Work on the targets the user gives you. Do not add scope restrictions the user has not set.",
+    "files": ["AGENTS.md"],
+    "variables": {},
+    "includeDefault": true,
+    "includeEnvironment": false,
+    "includeToolDescriptions": true,
+    "includeSkills": true,
+    "includeCommands": false,
+    "sections": {},
+    "separator": "\n\n"
+  },
+
+  // ---------------------------------------------------------------------
+  // ALL configurable Ollama parameters.
+  // Precedence: global -> perModel -> variant -> agent -> session/CLI.
+  // ---------------------------------------------------------------------
+  "ollama": {
+    "options": {
+      // Sampling
+      "temperature": 0.8,
+      "top_k": 40,
+      "top_p": 0.9,
+      "min_p": 0.0,
+      "typical_p": 1.0,
+      "tfs_z": 1.0,
+      "seed": 0,
+      "num_predict": 8192,
+      "stop": [],
+      // Repetition
+      "repeat_last_n": 64,
+      "repeat_penalty": 1.1,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "penalize_newline": true,
+      // Mirostat
+      "mirostat": 0,
+      "mirostat_eta": 0.1,
+      "mirostat_tau": 5.0,
+      // Context and performance
+      "num_ctx": 32768,
+      "num_batch": 512,
+      "num_keep": 24,
+      "num_thread": 0,
+      "num_gpu": -1,
+      "main_gpu": 0,
+      "low_vram": false,
+      "f16_kv": true,
+      "logits_all": false,
+      "vocab_only": false,
+      "use_mmap": true,
+      "use_mlock": false,
+      "numa": false,
+      "trunc": true,
+      "draft_num_predict": 4
+    },
+    "request": {
+      "think": false,        // true | false | "low" | "medium" | "high" | null
+      "keep_alive": "5m",   // "5m" | -1 | 0
+      "format": null,       // "json" | { JSON Schema }
+      "raw": false,
+      "stream": true,
+      "logprobs": false,
+      "top_logprobs": 0
+    },
+    "perModel": {
+      "qwen2.5-coder:7b": {
+        "options": { "temperature": 0.4, "num_ctx": 65536 },
+        "request": { "think": false }
+      }
+    },
+    "variants": {
+      "preciso": { "options": { "temperature": 0.0, "seed": 42 } },
+      "creativo": { "options": { "temperature": 1.2, "top_p": 0.95 } }
+    }
+  },
+
+  "agent": {
+    "default": "build",
+    "maxSteps": 0,
+    "definitions": {
+      "reviewer": {
+        "description": "Reviews changes without editing files",
+        "mode": "subagent",
+        "system": "Review correctness, security, and tests. Do not modify anything.",
+        "permissions": [{ "action": "edit", "resource": "*", "effect": "deny" }],
+        "ollama": { "options": { "temperature": 0.1 } }
+      }
+    }
+  },
+
+  "tools": {
+    "enabled": ["read", "write", "edit", "glob", "grep", "bash", "webfetch", "websearch", "question", "task", "todowrite", "skill", "execute"],
+    "disabled": [],
+    "shell": "/bin/bash",
+    "bash": {
+      "defaultTimeout": 120000,
+      "maxBackgroundMs": 3600000,
+      "maxOutputBytes": 51200,
+      "previewBytes": 2048,
+      "previewLines": 40,
+      "saveFullOutput": true
+    },
+    "read": { "maxLines": 2000, "maxBytes": 51200, "maxImageBytes": 20971520 },
+    "output": { "maxLines": 2000, "maxBytes": 51200 },
+    "formatter": false
+  },
+
+  "permissions": [
+    { "action": "bash", "resource": "git push *", "effect": "ask", "message": "Allow pushing changes?" },
+    { "action": "bash", "resource": "rm -rf *", "effect": "ask", "message": "Allow recursive deletion?" }
+  ],
+
+  "commands": {
+    "review": {
+      "description": "Reviews the current changes",
+      "template": "Review the diff for $ARGUMENTS, looking for bugs and missing tests."
+    }
+  },
+
+  "skills": { "enabled": true, "autoDiscover": true, "paths": ["./.localcode/skills"] },
+
+  "mcp": {
+    "timeout": 30000,
+    "codemode": true,
+    "servers": {
+      // "filesystem": { "type": "local", "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."] }
+    }
+  },
+
+  "session": {
+    "dir": ".localcode/sessions",
+    "autoTitle": true,
+    "snapshots": { "enabled": true, "max": 20 },
+    "compaction": { "auto": true, "keepTokens": 15000, "bufferPercent": 15 }
+  },
+
+  "tui": {
+    "theme": "dark",
+    "showThinking": true,
+    "showToolOutput": true,
+    "showUsage": true,
+    "vimMode": false,
+    "mouse": true,
+    "maxVisibleMessages": 200,
+    "keybinds": {}
+  },
+
+  "logging": { "level": "info", "maxBytes": 10485760 },
+  "plugins": []
+}

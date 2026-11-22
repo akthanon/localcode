@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://localcode.dev/schema/v1.json",
+  "title": "LocalCode configuration",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "profile": { "type": "string" },
+    "profiles": { "type": "object", "additionalProperties": { "type": "object" } },
+    "server": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "host": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "cors": { "type": "boolean" },
+        "authToken": { "type": "string" },
+        "basePath": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "provider": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["ollama", "openai-compatible"] },
+        "baseURL": { "type": "string" },
+        "apiKey": { "type": "string" },
+        "transport": { "enum": ["native", "openai"] },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "intervalMs": { "type": "integer" },
+            "timeoutMs": { "type": "integer" },
+            "includeEmbeddings": { "type": "boolean" }
+          }
+        },
+        "timeout": {
+          "type": "object",
+          "properties": {
+            "headers": { "type": "integer" },
+            "chunk": { "type": "integer" },
+            "total": { "type": "integer" }
+          }
+        },
+        "retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "default": { "type": "string" },
+        "variant": { "type": "string" },
+        "aliases": { "type": "object", "additionalProperties": { "type": "string" } },
+        "catalog": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "modelID": { "type": "string" },
+              "family": { "type": "string" },
+              "context": { "type": "integer" },
+              "output": { "type": "integer" },
+              "tools": { "type": "boolean" },
+              "vision": { "type": "boolean" },
+              "reasoning": { "type": "boolean" },
+              "embedding": { "type": "boolean" },
+              "disabled": { "type": "boolean" },
+              "systemPrompt": { "type": "string" },
+              "options": { "$ref": "#/$defs/ollamaOptions" },
+              "request": { "$ref": "#/$defs/ollamaRequest" }
+            }
+          }
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["replace", "prepend", "append"] },
+        "prompt": { "type": "string" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "variables": { "type": "object", "additionalProperties": { "type": "string" } },
+        "includeDefault": { "type": "boolean" },
+        "includeEnvironment": { "type": "boolean" },
+        "includeToolDescriptions": { "type": "boolean" },
+        "includeSkills": { "type": "boolean" },
+        "includeCommands": { "type": "boolean" },
+        "sections": { "type": "object", "additionalProperties": { "type": "string" } },
+        "separator": { "type": "string" }
+      }
+    },
+    "ollama": {
+      "type": "object",
+      "properties": {
+        "options": { "$ref": "#/$defs/ollamaOptions" },
+        "request": { "$ref": "#/$defs/ollamaRequest" },
+        "perModel": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "options": { "$ref": "#/$defs/ollamaOptions" },
+              "request": { "$ref": "#/$defs/ollamaRequest" },
+              "systemPrompt": { "type": "string" }
+            }
+          }
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "options": { "$ref": "#/$defs/ollamaOptions" },
+              "request": { "$ref": "#/$defs/ollamaRequest" },
+              "systemPrompt": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "default": { "type": "string" },
+        "maxSteps": { "type": "integer" },
+        "definitions": { "type": "object", "additionalProperties": { "type": "object" } }
+      }
+    },
+    "tools": { "type": "object" },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "resource": { "type": "string" },
+          "effect": { "enum": ["allow", "ask", "deny"] },
+          "message": { "type": "string" }
+        },
+        "required": ["action", "resource", "effect"]
+      }
+    },
+    "commands": { "type": "object" },
+    "skills": { "type": "object" },
+    "mcp": { "type": "object" },
+    "session": { "type": "object" },
+    "tui": { "type": "object" },
+    "logging": { "type": "object" },
+    "plugins": { "type": "array" }
+  },
+  "$defs": {
+    "ollamaOptions": {
+      "type": "object",
+      "description": "All Ollama runtime options (forwarded in `options`).",
+      "properties": {
+        "mirostat": { "type": "integer", "description": "0 off, 1 Mirostat, 2 Mirostat 2.0" },
+        "mirostat_eta": { "type": "number" },
+        "mirostat_tau": { "type": "number" },
+        "num_ctx": { "type": "integer" },
+        "repeat_last_n": { "type": "integer" },
+        "repeat_penalty": { "type": "number" },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "seed": { "type": "integer" },
+        "stop": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "num_predict": { "type": "integer" },
+        "draft_num_predict": { "type": "integer" },
+        "top_k": { "type": "integer" },
+        "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+        "min_p": { "type": "number", "minimum": 0, "maximum": 1 },
+        "typical_p": { "type": "number" },
+        "num_batch": { "type": "integer" },
+        "num_gpu": { "type": "integer" },
+        "main_gpu": { "type": "integer" },
+        "low_vram": { "type": "boolean" },
+        "f16_kv": { "type": "boolean" },
+        "logits_all": { "type": "boolean" },
+        "vocab_only": { "type": "boolean" },
+        "use_mmap": { "type": "boolean" },
+        "use_mlock": { "type": "boolean" },
+        "num_thread": { "type": "integer" },
+        "num_keep": { "type": "integer" },
+        "presence_penalty": { "type": "number" },
+        "frequency_penalty": { "type": "number" },
+        "tfs_z": { "type": "number" },
+        "penalize_newline": { "type": "boolean" },
+        "numa": { "type": "boolean" },
+        "trunc": { "type": "boolean" },
+        "num_gpu_layers": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "ollamaRequest": {
+      "type": "object",
+      "properties": {
+        "think": { "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "type": "null" }] },
+        "keep_alive": { "oneOf": [{ "type": "string" }, { "type": "number" }] },
+        "format": { "oneOf": [{ "type": "string", "enum": ["json"] }, { "type": "object" }, { "type": "null" }] },
+        "raw": { "type": "boolean" },
+        "stream": { "type": "boolean" },
+        "logprobs": { "type": "boolean" },
+        "top_logprobs": { "type": "integer" },
+        "suffix": { "type": "string" },
+        "system": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}
