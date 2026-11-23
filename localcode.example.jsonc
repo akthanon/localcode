@@ -202,7 +202,7 @@
     "dir": ".localcode/sessions",
     "autoTitle": true,
     "snapshots": { "enabled": true, "max": 20 },
-    "compaction": { "auto": true, "keepTokens": 15000, "bufferPercent": 15 }
+    "compaction": { "auto": true, "keepTokens": 8000, "bufferPercent": 20 }
   },
 
   "tui": {

@@ -276,6 +276,8 @@ When bash output exceeds `previewBytes` or `previewLines` (handy for `ffuf`), th
 
 Set `"tui": { "showUsage": true }` to show `ctx used/window percentage · out tokens · cache tokens` in the status line. The numbers come from Ollama's `prompt_eval_count` and `eval_count`, so you can verify how much context each step actually consumed.
 
+Compaction is proactive: it triggers at `num_ctx - bufferPercent%` (20% by default, so 80% of the window) using the measured token count from the last request, not just a character estimate. A `Context compacted: older messages were summarized.` note is added to the transcript. If Ollama still reports a context-length error, LocalCode compacts once and retries automatically.
+
 Mouse-wheel scrolling is enabled by default (`"tui": { "mouse": true }`). It uses SGR button reporting (1000+1006), not drag tracking. Press **F5** to copy the whole transcript to the terminal clipboard (OSC 52) and switch to selection mode (mouse reporting off, drag to copy); press F5 again to return to wheel scrolling. A plain-text copy is also saved to `.localcode/output/<session>/transcript.txt`. If your terminal ignores OSC 52, use that file or set `"mouse": false` and use PageUp/PageDown.
 
 Permission rules are evaluated in order; **the last match wins**.

@@ -102,13 +102,17 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   const agentInstructions = agent.instructions ? applyTemplate(agent.instructions, input) : "";
   const basePrompt = agent.system ?? (sys.includeDefault ? DEFAULT_SYSTEM_PROMPT : "");
 
+  // A per-agent `system` is a full replacement and must win over the global
+  // prompt, even when the global mode is "replace".
+  const explicitAgentSystem = agent.system;
+  const agentBase = explicitAgentSystem || basePrompt;
   let core: string;
   if (sys.mode === "replace") {
-    core = [userPrompt || basePrompt, agentInstructions].filter(Boolean).join("\n\n");
+    core = [explicitAgentSystem || userPrompt || agentBase, agentInstructions].filter(Boolean).join("\n\n");
   } else if (sys.mode === "prepend") {
-    core = [userPrompt, basePrompt, agentInstructions].filter(Boolean).join("\n\n");
+    core = [userPrompt, agentBase, agentInstructions].filter(Boolean).join("\n\n");
   } else {
-    core = [basePrompt, agentInstructions, userPrompt].filter(Boolean).join("\n\n");
+    core = [agentBase, agentInstructions, userPrompt].filter(Boolean).join("\n\n");
   }
   if (core) sections.push(core);
 

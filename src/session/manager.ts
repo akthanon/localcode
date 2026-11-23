@@ -9,6 +9,8 @@ import { randomUUID } from "node:crypto";
 
 /** Automatic titles, context compaction, and token estimation. */
 export class SessionManager {
+  /** Last compaction failure, exposed for status messages and diagnostics. */
+  lastError?: string;
   private readonly config: Config;
   private readonly provider: ModelProvider;
   private readonly agents: AgentLoader;
@@ -43,7 +45,30 @@ export class SessionManager {
     if (!this.config.session.compaction.auto) return false;
     const limit = this.contextLimit(session);
     const reserve = Math.ceil(limit * (this.config.session.compaction.bufferPercent / 100));
-    return this.estimateTokens(session.messages) > limit - reserve;
+    const estimated = this.estimateTokens(session.messages);
+    const measured = Number(session.metadata?.contextTokens ?? 0);
+    return Math.max(estimated, measured) > limit - reserve;
+  }
+
+  /** True when this session has enough older messages to summarize. */
+  canCompact(session: Session): boolean {
+    const split = this.compactionSplit(session);
+    return split > 3;
+  }
+
+  private compactionSplit(session: Session): number {
+    const keepTokens = this.config.session.compaction.keepTokens;
+    const reserve = Math.ceil(this.contextLimit(session) * (this.config.session.compaction.bufferPercent / 100));
+    let acc = 0;
+    let split = session.messages.length;
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      acc += this.estimateTokens([session.messages[i]!]);
+      if (acc > Math.min(keepTokens, reserve)) {
+        split = i + 1;
+        break;
+      }
+    }
+    return split;
   }
 
   shouldAutoTitle(session: Session): boolean {
@@ -87,20 +112,12 @@ export class SessionManager {
   }
 
   /** Summarizes the older conversation and keeps recent messages. */
-  async compact(session: Session): Promise<void> {
-    const keepTokens = this.config.session.compaction.keepTokens;
-    let split = session.messages.length;
-    let acc = 0;
-    for (let i = session.messages.length - 1; i >= 0; i--) {
-      acc += this.estimateTokens([session.messages[i]!]);
-      if (acc > keepTokens) {
-        split = i + 1;
-        break;
-      }
-    }
+  async compact(session: Session): Promise<boolean> {
+    this.lastError = undefined;
+    const split = this.compactionSplit(session);
     const old = session.messages.slice(0, Math.max(0, split - 1));
     const recent = session.messages.slice(Math.max(0, split - 1));
-    if (old.length < 3) return;
+    if (old.length < 3) return false;
 
     const agent = this.agents.get("compaction");
     const system = buildSystemPrompt({
@@ -112,9 +129,18 @@ export class SessionManager {
       skills: [],
       session,
     });
-    const transcript = old
-      .map((m) => `<${m.role}${m.toolName ? ` tool="${m.toolName}"` : ""}>${m.content.slice(0, 3000)}</${m.role}>`)
-      .join("\n");
+    // Keep the summary request inside the model's context window. Prefer the
+    // most recent old messages and drop older ones when the budget is reached.
+    const budget = Math.max(4000, Math.min(12000, Math.floor(this.contextLimit(session) * 0.15 * 4)));
+    const parts: string[] = [];
+    let used = 0;
+    for (const m of [...old].reverse()) {
+      const part = `<${m.role}${m.toolName ? ` tool="${m.toolName}"` : ""}>${m.content.slice(0, 400)}</${m.role}>`;
+      if (used + part.length > budget) break;
+      parts.unshift(part);
+      used += part.length;
+    }
+    const transcript = parts.join("\n");
 
     try {
       const stream = await this.provider.chat({
@@ -126,7 +152,10 @@ export class SessionManager {
       });
       let summary = "";
       for await (const chunk of stream) summary += chunk.text;
-      if (!summary.trim()) return;
+      if (!summary.trim()) {
+        this.lastError = "summary was empty";
+        return false;
+      }
 
       const summaryMessage: Message = {
         id: randomUUID(),
@@ -135,10 +164,22 @@ export class SessionManager {
         createdAt: new Date().toISOString(),
         metadata: { compaction: true },
       };
-      session.messages = [summaryMessage, ...recent.map((m) => ({ ...m, compacted: false }))];
+      const notice: Message = {
+        id: randomUUID(),
+        role: "system",
+        content: "Context compacted: older messages were summarized.",
+        createdAt: new Date().toISOString(),
+        metadata: { compactionNotice: true },
+      };
+      session.messages = [notice, summaryMessage, ...recent.map((m) => ({ ...m, compacted: false }))];
+      session.metadata ??= {};
+      delete session.metadata.contextTokens;
       this.store.save(session);
-    } catch {
+      return true;
+    } catch (error) {
       // If compaction fails, continue with the full context.
+      this.lastError = error instanceof Error ? error.message : String(error);
+      return false;
     }
   }
 }

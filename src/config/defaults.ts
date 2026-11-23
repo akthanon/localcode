@@ -153,7 +153,7 @@ export function defaultConfig(): Config {
       dir: ".localcode/sessions",
       autoTitle: true,
       snapshots: { enabled: true, max: 20 },
-      compaction: { auto: true, keepTokens: 15_000, bufferPercent: 15 },
+      compaction: { auto: true, keepTokens: 8_000, bufferPercent: 20 },
     },
     tui: {
       theme: "dark",

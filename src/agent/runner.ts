@@ -98,6 +98,7 @@ export class AgentRunner {
     const signal = options.signal;
 
     let step = 0;
+    let compactedAfterError = false;
     while (true) {
       if (signal?.aborted) {
         emit({ type: "error", error: "Execution cancelled", sessionID: session.id });
@@ -108,8 +109,20 @@ export class AgentRunner {
       await this.deps.plugins.emit("before-request", { session, step });
 
       if (!options.skipMaintenance && this.deps.sessions.shouldCompact(session)) {
-        emit({ type: "status", status: "Compacting context…", sessionID: session.id });
-        await this.deps.sessions.compact(session);
+        if (this.deps.sessions.canCompact(session)) {
+          emit({ type: "status", status: "Compacting context…", sessionID: session.id });
+          const compacted = await this.deps.sessions.compact(session);
+          if (!compacted) {
+            const reason = this.deps.sessions.lastError;
+            emit({
+              type: "status",
+              status: `Compaction failed; continuing with the current context${reason ? ` (${reason})` : ""}`,
+              sessionID: session.id,
+            });
+          }
+        } else {
+          emit({ type: "status", status: "Context is nearly full but no older messages can be compacted yet", sessionID: session.id });
+        }
       }
 
       const resolved = this.resolveParams(session, agent.id, options);
@@ -147,17 +160,34 @@ export class AgentRunner {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        const contextError = /context|too long|token|length|api\/chat/i.test(message);
+        if (contextError && !compactedAfterError && !signal?.aborted) {
+          compactedAfterError = true;
+          emit({ type: "status", status: "Context full; compacting and retrying…", sessionID: session.id });
+          const compacted = await this.deps.sessions.compact(session);
+          if (compacted) continue;
+          const reason = this.deps.sessions.lastError;
+          emit({ type: "error", error: `${message}${reason ? ` · compaction: ${reason}` : ""}`, sessionID: session.id });
+          store.save(session);
+          return session;
+        }
         emit({ type: "error", error: message, sessionID: session.id });
         store.save(session);
         return session;
       }
 
       if (usage) {
+        const promptTokens = Number(usage.prompt_eval_count ?? 0);
+        const outputTokens = Number(usage.eval_count ?? 0);
         emit({
           type: "usage",
           usage: { ...usage, contextWindow: Number(resolved.options.num_ctx ?? 0) },
           sessionID: session.id,
         });
+        if (promptTokens > 0) {
+          session.metadata ??= {};
+          session.metadata.contextTokens = promptTokens + outputTokens;
+        }
       }
 
       const toolCallsForMessage = toolCalls.length ? this.normalizeToolCalls(toolCalls) : undefined;

@@ -733,6 +733,10 @@ export class TUI {
               tools: this.runtime.tools.enabled(this.runtime.config),
               skills: this.runtime.skills.list(),
             });
+            if (command.agent) {
+              this.session.agent = command.agent;
+              this.runtime.store.save(this.session);
+            }
             void this.submit(expanded);
           } else {
             this.status = `Unknown command: ${name}`;
